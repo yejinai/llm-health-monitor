@@ -1,0 +1,116 @@
+# 🩺 llm-health-monitor
+
+A tiny, zero-database health monitor for LLM APIs, built with **Kotlin + Ktor**.
+
+It probes every model you configure — across **OpenAI, Anthropic, Google Gemini, and xAI** — with the
+cheapest possible request (1 output token), classifies each as `ok / slow / error / unavailable`,
+and stores results as **plain JSON files**. No database, no docker-compose, no setup:
+clone, add your keys, run.
+
+Born from a production multi-LLM service (ZeliAI) where knowing
+*"which provider is down right now?"* before users notice turned out to matter a lot.
+
+## Features
+
+- ⏱ **Startup + scheduled checks** — one full probe when the server boots, then every N minutes
+- 🪶 **Minimal-cost probes** — 1-token requests; image models checked via metadata endpoints only
+- 📁 **JSON file storage** — `data/latest.json` (current status) + `data/history.jsonl` (append-only runs, auto-trimmed)
+- 🌐 **Read-only HTTP API** + a single-file **dark dashboard** at `/`
+- 🧩 **Pluggable providers** — implement one small interface to add a provider
+- 🚫 **Graceful key handling** — providers without an API key are marked `skipped`, never crash
+
+## Quick start
+
+```bash
+git clone https://github.com/YOUR_USERNAME/llm-health-monitor.git
+cd llm-health-monitor
+
+# 1. Configure models
+cp config.example.json config.json     # edit the model list if you like
+
+# 2. Provide API keys (only the ones you have — others are skipped)
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
+export GEMINI_API_KEY=...
+export XAI_API_KEY=xai-...
+
+# 3. Run
+./gradlew run
+```
+
+Open <http://localhost:8080> for the dashboard.
+
+## API
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/health/models` | Latest status of every configured model |
+| `GET /api/health/history?limit=24` | Recent check runs, newest first |
+| `POST /api/health/check` | Trigger an immediate re-check |
+
+Example response (`GET /api/health/models`):
+
+```json
+{
+  "status": "success",
+  "last_checked_at": "2026-07-18 09:00:12",
+  "summary": { "total_models": 8, "ok_count": 7, "slow_count": 0,
+               "error_count": 0, "unavailable_count": 1, "skipped_count": 0 },
+  "models": [
+    { "model_name": "gpt-5-mini", "provider": "openai", "model_type": "text",
+      "status": "ok", "latency_ms": 842, "checked_at": "2026-07-18 09:00:12" }
+  ]
+}
+```
+
+## Configuration (`config.json`)
+
+| Key | Default | Description |
+|---|---|---|
+| `port` | `8080` | HTTP port |
+| `checkIntervalMinutes` | `60` | Minutes between checks |
+| `slowThresholdMs` | `15000` | Latency above this → `slow` |
+| `requestTimeoutMs` | `30000` | Per-probe timeout → `unavailable` |
+| `dataDir` | `data` | Where JSON files are written |
+| `historyMaxRuns` | `1000` | Max runs kept in `history.jsonl` |
+| `models` | — | List of `{name, provider, type}` |
+
+Supported `provider` values: `openai`, `anthropic`, `google`, `xai` (alias: `grok`).
+
+## Adding a provider
+
+Implement `ProviderChecker` and register it:
+
+```kotlin
+object MyProviderChecker : ProviderChecker {
+    override val provider = "myprovider"
+    override suspend fun check(client: HttpClient, model: ModelInfo, apiKey: String) {
+        // smallest possible request; throw on failure
+    }
+}
+```
+
+Add it to `ProviderRegistry` and use `"provider": "myprovider"` in `config.json`.
+API key is read from the `MYPROVIDER_API_KEY`-style mapping in `ApiKeys` (add a branch there too).
+
+## Status semantics
+
+| Status | Meaning |
+|---|---|
+| `ok` | Responded within `slowThresholdMs` |
+| `slow` | Responded, but slower than the threshold |
+| `error` | Provider returned a non-OK response (bad model id, quota, auth…) |
+| `unavailable` | Request timed out |
+| `skipped` | No API key configured for this provider |
+
+## Notes
+
+- API keys are read from **environment variables only** — they are never written to config or data files.
+- The check endpoints cost a few tokens per model per run. With 1-token outputs and hourly checks,
+  monthly cost is typically well under $1 per provider.
+- `POST /api/health/check` is unauthenticated by design (self-hosted tool). Put it behind a reverse
+  proxy or add auth if you expose it publicly.
+
+## License
+
+[MIT](LICENSE)

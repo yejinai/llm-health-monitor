@@ -1,0 +1,18 @@
+{
+  "port": 8080,
+  "checkIntervalMinutes": 60,
+  "slowThresholdMs": 15000,
+  "requestTimeoutMs": 30000,
+  "dataDir": "data",
+  "historyMaxRuns": 1000,
+  "models": [
+    { "name": "gpt-5-mini",                  "provider": "openai",    "type": "text" },
+    { "name": "gpt-5-nano",                  "provider": "openai",    "type": "text" },
+    { "name": "dall-e-3",                    "provider": "openai",    "type": "image" },
+    { "name": "claude-opus-4-5-20251101",    "provider": "anthropic", "type": "text" },
+    { "name": "claude-sonnet-4-5-20250929",  "provider": "anthropic", "type": "text" },
+    { "name": "gemini-2.5-flash",            "provider": "google",    "type": "text" },
+    { "name": "gemini-2.5-pro",              "provider": "google",    "type": "text" },
+    { "name": "grok-4-0709",                 "provider": "xai",       "type": "text" }
+  ]
+}

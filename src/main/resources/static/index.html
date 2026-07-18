@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Health Monitor</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 24px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #8b949e; font-size: 13px; margin-bottom: 20px; }
+  .summary { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 16px; min-width: 90px; }
+  .stat .n { font-size: 22px; font-weight: 700; }
+  .stat .l { font-size: 11px; color: #8b949e; }
+  table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #21262d; }
+  th { color: #8b949e; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .ok          { background: #1a4d2e33; color: #3fb950; }
+  .slow        { background: #bb800933; color: #d29922; }
+  .error       { background: #da363333; color: #f85149; }
+  .unavailable { background: #6e768166; color: #8b949e; }
+  .skipped     { background: #21262d;   color: #6e7681; }
+  .err { color: #8b949e; font-size: 11px; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 12px; }
+  button:hover { background: #30363d; }
+</style>
+</head>
+<body>
+  <h1>🩺 LLM Health Monitor</h1>
+  <div class="sub">Last checked: <span id="checkedAt">–</span>
+    &nbsp;<button onclick="recheck()">Re-check now</button></div>
+  <div class="summary" id="summary"></div>
+  <table>
+    <thead><tr><th>Model</th><th>Provider</th><th>Type</th><th>Status</th><th>Latency</th><th>Error</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+<script>
+async function load() {
+  const res = await fetch('/api/health/models');
+  if (!res.ok) { document.getElementById('checkedAt').textContent = 'waiting for first check…'; return; }
+  const data = await res.json();
+  document.getElementById('checkedAt').textContent = data.last_checked_at || '–';
+  const s = data.summary;
+  document.getElementById('summary').innerHTML = [
+    ['Total', s.total_models], ['OK', s.ok_count], ['Slow', s.slow_count],
+    ['Error', s.error_count], ['Unavailable', s.unavailable_count], ['Skipped', s.skipped_count]
+  ].map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+  document.getElementById('rows').innerHTML = data.models.map(m => `
+    <tr>
+      <td><strong>${m.model_name}</strong></td>
+      <td>${m.provider}</td>
+      <td>${m.model_type}</td>
+      <td><span class="badge ${m.status}">${m.status}</span></td>
+      <td>${m.latency_ms != null ? m.latency_ms + ' ms' : '–'}</td>
+      <td class="err" title="${m.error_message || ''}">${m.error_message || ''}</td>
+    </tr>`).join('');
+}
+async function recheck() {
+  document.getElementById('checkedAt').textContent = 'checking…';
+  await fetch('/api/health/check', { method: 'POST' });
+  load();
+}
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>
