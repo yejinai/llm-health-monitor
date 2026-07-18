@@ -23,6 +23,8 @@ data class AppConfig(
     val uptimeWindowRuns: Int = 100,
     /** Latency this many times above a model's own median baseline counts as degraded. */
     val degradedLatencyRatio: Double = 2.0,
+    /** Consecutive failed runs required before hidden degradation is flagged (1 = immediate). */
+    val confirmationRuns: Int = 1,
     /**
      * Official status pages per provider (Atlassian Statuspage JSON endpoints).
      * Compared against our observed probes to detect unreported degradation.

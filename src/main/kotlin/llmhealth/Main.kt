@@ -83,7 +83,7 @@ fun main() {
                 get("/insights") {
                     val latest = service.storage.readLatest()
                     val history = service.storage.readHistory(config.uptimeWindowRuns)
-                    call.respond(Stats.insights(latest, history, config.models, config.degradedLatencyRatio))
+                    call.respond(Stats.insights(latest, history, config.models, config.degradedLatencyRatio, config.confirmationRuns))
                 }
             }
 
@@ -91,7 +91,7 @@ fun main() {
             get("/metrics") {
                 val latest = service.storage.readLatest()
                 val history = service.storage.readHistory(config.uptimeWindowRuns)
-                val insights = Stats.insights(latest, history, config.models, config.degradedLatencyRatio)
+                val insights = Stats.insights(latest, history, config.models, config.degradedLatencyRatio, config.confirmationRuns)
                 call.respondText(
                     Stats.prometheus(latest) + Stats.prometheusInsights(insights),
                     ContentType.Text.Plain

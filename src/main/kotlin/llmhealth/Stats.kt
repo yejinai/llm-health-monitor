@@ -58,7 +58,8 @@ object Stats {
         latest: HealthCheckResponse?,
         history: List<HealthCheckRun>,
         models: List<ModelInfo>,
-        degradedLatencyRatio: Double
+        degradedLatencyRatio: Double,
+        confirmationRuns: Int = 1
     ): List<ModelInsight> {
         if (latest == null) return emptyList()
         val officialByProvider = latest.officialStatus?.associateBy { it.provider.lowercase() } ?: emptyMap()
@@ -82,13 +83,22 @@ object Stats {
             val officialIndicator = official?.indicator ?: "unknown"
             val officialClaimsOk = officialIndicator == "none"
 
-            val observedHardFailure = current.status == "error" || current.status == "unavailable"
+            // Consecutive failed runs, newest first (history[0] is the current run)
+            var consecutiveFailures = 0
+            for (run in history) {
+                val m = run.models.find { it.modelName == model.name && it.provider == model.provider }
+                    ?: break
+                if (m.status == "error" || m.status == "unavailable") consecutiveFailures++ else break
+            }
+
+            val observedHardFailure = (current.status == "error" || current.status == "unavailable") &&
+                consecutiveFailures >= confirmationRuns
             val observedSlowdown = ratio != null && ratio >= degradedLatencyRatio
             val hidden = officialClaimsOk && (observedHardFailure || observedSlowdown)
 
             val note = when {
                 hidden && observedHardFailure ->
-                    "Probe failed (${current.status}) while the official status page reports all operational."
+                    "Probe failed $consecutiveFailures time(s) in a row (${current.status}) while the official status page reports all operational."
                 hidden && observedSlowdown ->
                     "Latency is ${ratio}x this model's baseline while the official status page reports all operational."
                 observedHardFailure && !officialClaimsOk ->
@@ -104,6 +114,7 @@ object Stats {
                 latencyMs = current.latencyMs,
                 baselineLatencyMs = baseline,
                 latencyRatio = ratio,
+                consecutiveFailures = consecutiveFailures,
                 hiddenDegradation = hidden,
                 note = note
             )

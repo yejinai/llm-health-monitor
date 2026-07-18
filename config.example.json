@@ -7,6 +7,8 @@
   "historyMaxRuns": 1000,
   "webhookUrl": null,
   "uptimeWindowRuns": 100,
+  "degradedLatencyRatio": 2.0,
+  "confirmationRuns": 1,
   "models": [
     { "name": "gpt-5-mini",                  "provider": "openai",    "type": "text" },
     { "name": "gpt-5-nano",                  "provider": "openai",    "type": "text" },

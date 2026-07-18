@@ -79,6 +79,8 @@ data class ModelInsight(
     @SerialName("baseline_latency_ms") val baselineLatencyMs: Int? = null,
     /** Current latency / baseline. > 2.0 means unusually slow for THIS model. */
     @SerialName("latency_ratio") val latencyRatio: Double? = null,
+    /** How many consecutive runs (incl. this one) this model has failed. 0 when healthy. */
+    @SerialName("consecutive_failures") val consecutiveFailures: Int = 0,
     /** true = we observe a problem the official status page does not report. */
     @SerialName("hidden_degradation") val hiddenDegradation: Boolean,
     val note: String? = null
