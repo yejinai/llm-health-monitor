@@ -50,3 +50,15 @@ data class HealthCheckRun(
     val summary: HealthSummary,
     val models: List<ModelHealthStatus>
 )
+
+/** Uptime statistics for one model over the recent history window. */
+@Serializable
+data class ModelUptime(
+    @SerialName("model_name") val modelName: String,
+    val provider: String,
+    /** ok+slow runs / counted runs × 100. Null when no counted samples. */
+    @SerialName("uptime_percent") val uptimePercent: Double? = null,
+    @SerialName("avg_latency_ms") val avgLatencyMs: Int? = null,
+    /** Number of runs counted (skipped runs are excluded). */
+    val samples: Int
+)

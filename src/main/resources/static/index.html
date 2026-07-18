@@ -34,7 +34,7 @@
     &nbsp;<button onclick="recheck()">Re-check now</button></div>
   <div class="summary" id="summary"></div>
   <table>
-    <thead><tr><th>Model</th><th>Provider</th><th>Type</th><th>Status</th><th>Latency</th><th>Error</th></tr></thead>
+    <thead><tr><th>Model</th><th>Provider</th><th>Type</th><th>Status</th><th>Latency</th><th>Uptime</th><th>Error</th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
 <script>
@@ -42,21 +42,35 @@ async function load() {
   const res = await fetch('/api/health/models');
   if (!res.ok) { document.getElementById('checkedAt').textContent = 'waiting for first check…'; return; }
   const data = await res.json();
+  let uptimes = {};
+  try {
+    const upRes = await fetch('/api/health/uptime');
+    if (upRes.ok) {
+      (await upRes.json()).forEach(u => { uptimes[u.provider + '/' + u.model_name] = u; });
+    }
+  } catch (e) { /* uptime optional */ }
   document.getElementById('checkedAt').textContent = data.last_checked_at || '–';
   const s = data.summary;
   document.getElementById('summary').innerHTML = [
     ['Total', s.total_models], ['OK', s.ok_count], ['Slow', s.slow_count],
     ['Error', s.error_count], ['Unavailable', s.unavailable_count], ['Skipped', s.skipped_count]
   ].map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
-  document.getElementById('rows').innerHTML = data.models.map(m => `
+  document.getElementById('rows').innerHTML = data.models.map(m => {
+    const u = uptimes[m.provider + '/' + m.model_name];
+    const uptime = u && u.uptime_percent != null
+      ? `<span class="${u.uptime_percent >= 99 ? 'ok' : (u.uptime_percent >= 90 ? 'slow' : 'error')} badge">${u.uptime_percent}%</span>`
+      : '–';
+    return `
     <tr>
       <td><strong>${m.model_name}</strong></td>
       <td>${m.provider}</td>
       <td>${m.model_type}</td>
       <td><span class="badge ${m.status}">${m.status}</span></td>
       <td>${m.latency_ms != null ? m.latency_ms + ' ms' : '–'}</td>
+      <td>${uptime}</td>
       <td class="err" title="${m.error_message || ''}">${m.error_message || ''}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 async function recheck() {
   document.getElementById('checkedAt').textContent = 'checking…';

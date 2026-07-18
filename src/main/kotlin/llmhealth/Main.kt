@@ -59,6 +59,30 @@ fun main() {
                 post("/check") {
                     call.respond(service.runHealthCheck())
                 }
+
+                /** Per-model uptime %% over the recent history window. ?runs=100 */
+                get("/uptime") {
+                    val runs = (call.parameters["runs"]?.toIntOrNull() ?: config.uptimeWindowRuns)
+                        .coerceIn(1, config.historyMaxRuns)
+                    val history = service.storage.readHistory(runs)
+                    call.respond(Stats.uptime(history, config.models))
+                }
+
+                /** Shields.io endpoint badge — embed live status in any README. */
+                get("/badge") {
+                    call.respondText(
+                        Stats.badgeJson(service.storage.readLatest()),
+                        ContentType.Application.Json
+                    )
+                }
+            }
+
+            /** Prometheus metrics (text exposition format). */
+            get("/metrics") {
+                call.respondText(
+                    Stats.prometheus(service.storage.readLatest()),
+                    ContentType.Text.Plain
+                )
             }
         }
     }.start(wait = true)

@@ -5,6 +5,8 @@
   "requestTimeoutMs": 30000,
   "dataDir": "data",
   "historyMaxRuns": 1000,
+  "webhookUrl": null,
+  "uptimeWindowRuns": 100,
   "models": [
     { "name": "gpt-5-mini",                  "provider": "openai",    "type": "text" },
     { "name": "gpt-5-nano",                  "provider": "openai",    "type": "text" },

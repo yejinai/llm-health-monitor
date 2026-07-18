@@ -15,9 +15,25 @@ Born from a production multi-LLM service (ZeliAI) where knowing
 - ⏱ **Startup + scheduled checks** — one full probe when the server boots, then every N minutes
 - 🪶 **Minimal-cost probes** — 1-token requests; image models checked via metadata endpoints only
 - 📁 **JSON file storage** — `data/latest.json` (current status) + `data/history.jsonl` (append-only runs, auto-trimmed)
-- 🌐 **Read-only HTTP API** + a single-file **dark dashboard** at `/`
+- 🌐 **Read-only HTTP API** + a single-file **dark dashboard** at `/` with per-model uptime %
+- 🔔 **Webhook alerts** — one URL works for Slack, Discord, or any JSON consumer; fires on down/recovered transitions only
+- 🏷 **Live README badge** — Shields.io endpoint at `/api/health/badge`
+- 📈 **Prometheus metrics** at `/metrics` — drop into an existing Grafana setup
+- 🐳 **Docker-ready** — multi-stage `Dockerfile` included
 - 🧩 **Pluggable providers** — implement one small interface to add a provider
 - 🚫 **Graceful key handling** — providers without an API key are marked `skipped`, never crash
+
+## How it compares
+
+| | llm-health-monitor | LiteLLM proxy health checks | Langfuse / OpenLLMetry / Opik | Uptime Kuma / Gatus |
+|---|---|---|---|---|
+| Purpose | "Are my LLM providers up?" | Part of a full LLM gateway | LLM observability (traces, evals, cost) | Generic uptime monitoring |
+| Setup | Clone + keys + run (no DB) | Run the whole proxy | DB + SDK integration | Generic — you write per-API probes yourself |
+| LLM-specific probes | ✅ built-in (incl. o-series/image quirks) | ✅ | ❌ (instruments your app's calls) | ❌ manual |
+| Footprint | Single small JVM app, JSON files | Medium | Heavy | Medium |
+
+If you need request tracing, evals, or cost analytics, use an observability platform — this tool
+deliberately does one small thing well.
 
 ## Quick start
 
@@ -40,13 +56,39 @@ export XAI_API_KEY=xai-...
 
 Open <http://localhost:8080> for the dashboard.
 
+### Or with Docker
+
+```bash
+docker build -t llm-health-monitor .
+docker run -p 8080:8080 \
+  -v ./config.json:/app/config.json -v ./data:/app/data \
+  -e OPENAI_API_KEY=sk-... -e ANTHROPIC_API_KEY=sk-ant-... \
+  llm-health-monitor
+```
+
 ## API
 
 | Endpoint | Description |
 |---|---|
 | `GET /api/health/models` | Latest status of every configured model |
 | `GET /api/health/history?limit=24` | Recent check runs, newest first |
+| `GET /api/health/uptime?runs=100` | Per-model uptime % + avg latency over recent runs |
+| `GET /api/health/badge` | Shields.io endpoint-badge JSON |
+| `GET /metrics` | Prometheus text exposition format |
 | `POST /api/health/check` | Trigger an immediate re-check |
+
+### Live badge in your README
+
+```markdown
+![LLM status](https://img.shields.io/endpoint?url=https://your-host/api/health/badge)
+```
+
+### Webhook alerts
+
+Set `"webhookUrl"` in `config.json` to a Slack incoming webhook, Discord webhook, or any
+HTTP endpoint. A notification fires **only on transitions** (a model going down, or recovering) —
+no hourly noise. The payload contains `text` (Slack), `content` (Discord), and a structured
+`events` array for programmatic consumers.
 
 Example response (`GET /api/health/models`):
 
@@ -73,6 +115,8 @@ Example response (`GET /api/health/models`):
 | `requestTimeoutMs` | `30000` | Per-probe timeout → `unavailable` |
 | `dataDir` | `data` | Where JSON files are written |
 | `historyMaxRuns` | `1000` | Max runs kept in `history.jsonl` |
+| `webhookUrl` | `null` | Slack/Discord/generic webhook for down/recovery alerts |
+| `uptimeWindowRuns` | `100` | Runs counted for the uptime percentage |
 | `models` | — | List of `{name, provider, type}` |
 
 Supported `provider` values: `openai`, `anthropic`, `google`, `xai` (alias: `grok`).

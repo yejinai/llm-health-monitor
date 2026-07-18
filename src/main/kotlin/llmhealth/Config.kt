@@ -17,6 +17,10 @@ data class AppConfig(
     val requestTimeoutMs: Long = 30_000,
     val dataDir: String = "data",
     val historyMaxRuns: Int = 1000,
+    /** Optional webhook (Slack/Discord/generic) notified when a model goes down or recovers. */
+    val webhookUrl: String? = null,
+    /** How many recent runs the uptime percentage is computed over. */
+    val uptimeWindowRuns: Int = 100,
     val models: List<ModelInfo> = emptyList()
 ) {
     companion object {

@@ -36,6 +36,7 @@ class HealthCheckService(private val config: AppConfig) {
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val notifier = config.webhookUrl?.let { WebhookNotifier(client, it) }
 
     /** Start the scheduler: immediate first run, then every checkIntervalMinutes. */
     fun startScheduler() {
@@ -75,7 +76,9 @@ class HealthCheckService(private val config: AppConfig) {
             summary = summary,
             models = results
         )
+        val previous = storage.readLatest()
         storage.saveRun(response, HealthCheckRun(checkedAt = now, summary = summary, models = results))
+        notifier?.notifyTransitions(previous, response)
 
         val elapsed = System.currentTimeMillis() - startTime
         logger.info(
