@@ -2,7 +2,7 @@
 
 > **Catch LLM outages the providers' status pages don't admit.**
 
-[![build](https://github.com/YOUR_USERNAME/llm-health-monitor/actions/workflows/build.yml/badge.svg)](https://github.com/YOUR_USERNAME/llm-health-monitor/actions)
+[![build](https://github.com/hajunho/llm-health-monitor/actions/workflows/build.yml/badge.svg)](https://github.com/hajunho/llm-health-monitor/actions)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)
 ![ktor](https://img.shields.io/badge/Ktor-3.0-087CFA)
@@ -89,7 +89,7 @@ That flag is what pages you before your users notice — and before the vendor t
 ## Quick start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/llm-health-monitor.git
+git clone https://github.com/hajunho/llm-health-monitor.git
 cd llm-health-monitor
 
 cp config.example.json config.json      # 1. pick your models
