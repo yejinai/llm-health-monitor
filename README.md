@@ -1,11 +1,34 @@
 # 🩺 llm-health-monitor
 
-A tiny, zero-database health monitor for LLM APIs, built with **Kotlin + Ktor**.
+**Catch LLM outages the providers' status pages don't admit.**
 
+A tiny, zero-database health monitor for LLM APIs, built with **Kotlin + Ktor**.
 It probes every model you configure — across **OpenAI, Anthropic, Google Gemini, and xAI** — with the
 cheapest possible request (1 output token), classifies each as `ok / slow / error / unavailable`,
-and stores results as **plain JSON files**. No database, no docker-compose, no setup:
-clone, add your keys, run.
+and stores results as **plain JSON files**. Clone, add your keys, run.
+
+## Why not just watch status.openai.com?
+
+Because official status pages are famously the last to know. Real incidents routinely produce
+elevated error rates and multi-x latency long before (or without) the provider acknowledging
+anything. This tool measures **reality** — actual API probes from your own network — and fetches
+each provider's official status page **at the same moment**, so the gap between the two becomes
+a first-class, queryable signal:
+
+```json
+// GET /api/health/insights
+{
+  "model_name": "gpt-5-mini", "provider": "openai",
+  "observed_status": "error", "official_indicator": "none",
+  "latency_ratio": 3.4, "baseline_latency_ms": 850,
+  "hidden_degradation": true,
+  "note": "Probe failed (error) while the official status page reports all operational."
+}
+```
+
+`hidden_degradation` fires when a probe fails — or runs ≥2× that model's **own median baseline** —
+while the official page still says "All Systems Operational". The dashboard shows these as
+red banner alerts, and Prometheus exposes them as `llm_health_hidden_degradation`.
 
 Born from a production multi-LLM service (ZeliAI) where knowing
 *"which provider is down right now?"* before users notice turned out to matter a lot.
@@ -15,7 +38,8 @@ Born from a production multi-LLM service (ZeliAI) where knowing
 - ⏱ **Startup + scheduled checks** — one full probe when the server boots, then every N minutes
 - 🪶 **Minimal-cost probes** — 1-token requests; image models checked via metadata endpoints only
 - 📁 **JSON file storage** — `data/latest.json` (current status) + `data/history.jsonl` (append-only runs, auto-trimmed)
-- 🌐 **Read-only HTTP API** + a single-file **dark dashboard** at `/` with per-model uptime %
+- 🕵️ **Hidden-degradation detection** — observed probes vs. official status pages, per-model latency baselines
+- 🌐 **Read-only HTTP API** + a single-file **dark dashboard** at `/` with per-model uptime % and red hidden-degradation alerts
 - 🔔 **Webhook alerts** — one URL works for Slack, Discord, or any JSON consumer; fires on down/recovered transitions only
 - 🏷 **Live README badge** — Shields.io endpoint at `/api/health/badge`
 - 📈 **Prometheus metrics** at `/metrics` — drop into an existing Grafana setup
@@ -73,6 +97,7 @@ docker run -p 8080:8080 \
 | `GET /api/health/models` | Latest status of every configured model |
 | `GET /api/health/history?limit=24` | Recent check runs, newest first |
 | `GET /api/health/uptime?runs=100` | Per-model uptime % + avg latency over recent runs |
+| `GET /api/health/insights` | Observed reality vs. official status pages — hidden degradation flags |
 | `GET /api/health/badge` | Shields.io endpoint-badge JSON |
 | `GET /metrics` | Prometheus text exposition format |
 | `POST /api/health/check` | Trigger an immediate re-check |
@@ -117,6 +142,8 @@ Example response (`GET /api/health/models`):
 | `historyMaxRuns` | `1000` | Max runs kept in `history.jsonl` |
 | `webhookUrl` | `null` | Slack/Discord/generic webhook for down/recovery alerts |
 | `uptimeWindowRuns` | `100` | Runs counted for the uptime percentage |
+| `degradedLatencyRatio` | `2.0` | Latency ≥ this × the model's median baseline → degradation |
+| `officialStatusUrls` | OpenAI + Anthropic | Statuspage JSON endpoints compared against observed probes |
 | `models` | — | List of `{name, provider, type}` |
 
 Supported `provider` values: `openai`, `anthropic`, `google`, `xai` (alias: `grok`).

@@ -37,6 +37,7 @@ class HealthCheckService(private val config: AppConfig) {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val notifier = config.webhookUrl?.let { WebhookNotifier(client, it) }
+    private val officialStatusFetcher = OfficialStatusFetcher(client, config.officialStatusUrls)
 
     /** Start the scheduler: immediate first run, then every checkIntervalMinutes. */
     fun startScheduler() {
@@ -55,10 +56,17 @@ class HealthCheckService(private val config: AppConfig) {
         val startTime = System.currentTimeMillis()
         logger.info("Running health check for ${config.models.size} models...")
 
+        val providers = config.models.map { it.provider.lowercase() }.toSet()
+        var officialStatuses: List<ProviderOfficialStatus> = emptyList()
         val results = coroutineScope {
-            config.models.map { model ->
+            // Official status pages are fetched IN PARALLEL with the probes so both
+            // reflect the same moment — that's what makes the discrepancy meaningful.
+            val officialDeferred = async(Dispatchers.IO) { officialStatusFetcher.fetchAll(providers) }
+            val probes = config.models.map { model ->
                 async(Dispatchers.IO) { checkModel(model) }
             }.awaitAll()
+            officialStatuses = officialDeferred.await()
+            probes
         }
 
         val now = LocalDateTime.now().format(dtFormatter)
@@ -74,7 +82,8 @@ class HealthCheckService(private val config: AppConfig) {
             status = "success",
             lastCheckedAt = now,
             summary = summary,
-            models = results
+            models = results,
+            officialStatus = officialStatuses
         )
         val previous = storage.readLatest()
         storage.saveRun(response, HealthCheckRun(checkedAt = now, summary = summary, models = results))

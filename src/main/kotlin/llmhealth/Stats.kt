@@ -46,6 +46,80 @@ object Stats {
         return """{"schemaVersion":1,"label":"LLM APIs","message":"$up/$counted up","color":"$color"}"""
     }
 
+    /**
+     * The differentiator: reality vs. the provider's official claim.
+     *
+     * A model is flagged `hidden_degradation` when our probe observed a problem
+     * (error/unavailable, or latency ≥ degradedLatencyRatio × its own median baseline)
+     * while the provider's official status page reports "none" (all operational).
+     * Official status pages are slow to admit incidents — this measures the gap.
+     */
+    fun insights(
+        latest: HealthCheckResponse?,
+        history: List<HealthCheckRun>,
+        models: List<ModelInfo>,
+        degradedLatencyRatio: Double
+    ): List<ModelInsight> {
+        if (latest == null) return emptyList()
+        val officialByProvider = latest.officialStatus?.associateBy { it.provider.lowercase() } ?: emptyMap()
+
+        return models.mapNotNull { model ->
+            val current = latest.models.find { it.modelName == model.name && it.provider == model.provider }
+                ?: return@mapNotNull null
+            if (current.status == "skipped") return@mapNotNull null
+
+            val baselineLatencies = history
+                .mapNotNull { run -> run.models.find { it.modelName == model.name && it.provider == model.provider } }
+                .filter { it.status == "ok" || it.status == "slow" }
+                .mapNotNull { it.latencyMs }
+                .sorted()
+            val baseline = if (baselineLatencies.isNotEmpty()) baselineLatencies[baselineLatencies.size / 2] else null
+
+            val ratio = if (current.latencyMs != null && baseline != null && baseline > 0)
+                Math.round(current.latencyMs * 100.0 / baseline) / 100.0 else null
+
+            val official = officialByProvider[model.provider.lowercase()]
+            val officialIndicator = official?.indicator ?: "unknown"
+            val officialClaimsOk = officialIndicator == "none"
+
+            val observedHardFailure = current.status == "error" || current.status == "unavailable"
+            val observedSlowdown = ratio != null && ratio >= degradedLatencyRatio
+            val hidden = officialClaimsOk && (observedHardFailure || observedSlowdown)
+
+            val note = when {
+                hidden && observedHardFailure ->
+                    "Probe failed (${current.status}) while the official status page reports all operational."
+                hidden && observedSlowdown ->
+                    "Latency is ${ratio}x this model's baseline while the official status page reports all operational."
+                observedHardFailure && !officialClaimsOk ->
+                    "Probe failed — consistent with the officially reported incident ($officialIndicator)."
+                else -> null
+            }
+
+            ModelInsight(
+                modelName = model.name,
+                provider = model.provider,
+                observedStatus = current.status,
+                officialIndicator = officialIndicator,
+                latencyMs = current.latencyMs,
+                baselineLatencyMs = baseline,
+                latencyRatio = ratio,
+                hiddenDegradation = hidden,
+                note = note
+            )
+        }
+    }
+
+    /** Prometheus metrics for hidden-degradation detection, appended to /metrics. */
+    fun prometheusInsights(insights: List<ModelInsight>): String = buildString {
+        appendLine("# HELP llm_health_hidden_degradation 1 when we observe a problem the provider's official status page does not report.")
+        appendLine("# TYPE llm_health_hidden_degradation gauge")
+        insights.forEach { i ->
+            val v = if (i.hiddenDegradation) 1 else 0
+            appendLine("""llm_health_hidden_degradation{model="${i.modelName}",provider="${i.provider}"} $v""")
+        }
+    }
+
     /** Prometheus text exposition format (0.0.4) rendered from the latest check. */
     fun prometheus(latest: HealthCheckResponse?): String = buildString {
         appendLine("# HELP llm_health_up 1 if the model responded (ok or slow), 0 otherwise. Skipped models are omitted.")

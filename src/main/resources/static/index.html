@@ -26,13 +26,18 @@
   .err { color: #8b949e; font-size: 11px; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   button { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 12px; }
   button:hover { background: #30363d; }
+  .alert { background: #da363322; border: 1px solid #f8514966; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
+  .alert strong { color: #f85149; }
+  .official-note { font-size: 11px; color: #8b949e; margin-top: 2px; }
 </style>
 </head>
 <body>
   <h1>🩺 LLM Health Monitor</h1>
   <div class="sub">Last checked: <span id="checkedAt">–</span>
     &nbsp;<button onclick="recheck()">Re-check now</button></div>
+  <div id="alerts"></div>
   <div class="summary" id="summary"></div>
+  <div class="summary" id="official"></div>
   <table>
     <thead><tr><th>Model</th><th>Provider</th><th>Type</th><th>Status</th><th>Latency</th><th>Uptime</th><th>Error</th></tr></thead>
     <tbody id="rows"></tbody>
@@ -49,6 +54,25 @@ async function load() {
       (await upRes.json()).forEach(u => { uptimes[u.provider + '/' + u.model_name] = u; });
     }
   } catch (e) { /* uptime optional */ }
+  // Hidden degradation alerts — problems the provider's status page doesn't report
+  try {
+    const insRes = await fetch('/api/health/insights');
+    if (insRes.ok) {
+      const hidden = (await insRes.json()).filter(i => i.hidden_degradation);
+      document.getElementById('alerts').innerHTML = hidden.map(i =>
+        `<div class="alert">⚠️ <strong>Hidden degradation:</strong> ${i.model_name} (${i.provider}) — ${i.note}</div>`
+      ).join('');
+    }
+  } catch (e) { /* insights optional */ }
+  // Official status pages vs our observation
+  const official = data.official_status || [];
+  const indicatorIcon = { none: '🟢', minor: '🟡', major: '🟠', critical: '🔴', unknown: '⚪' };
+  document.getElementById('official').innerHTML = official.map(o => `
+    <div class="stat">
+      <div class="n">${indicatorIcon[o.indicator] || '⚪'}</div>
+      <div class="l">${o.provider} official</div>
+      <div class="official-note">${o.description || o.indicator}</div>
+    </div>`).join('');
   document.getElementById('checkedAt').textContent = data.last_checked_at || '–';
   const s = data.summary;
   document.getElementById('summary').innerHTML = [

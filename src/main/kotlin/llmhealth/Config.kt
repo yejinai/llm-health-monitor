@@ -21,6 +21,17 @@ data class AppConfig(
     val webhookUrl: String? = null,
     /** How many recent runs the uptime percentage is computed over. */
     val uptimeWindowRuns: Int = 100,
+    /** Latency this many times above a model's own median baseline counts as degraded. */
+    val degradedLatencyRatio: Double = 2.0,
+    /**
+     * Official status pages per provider (Atlassian Statuspage JSON endpoints).
+     * Compared against our observed probes to detect unreported degradation.
+     * Set a provider to null / remove it to skip.
+     */
+    val officialStatusUrls: Map<String, String> = mapOf(
+        "openai" to "https://status.openai.com/api/v2/status.json",
+        "anthropic" to "https://status.anthropic.com/api/v2/status.json"
+    ),
     val models: List<ModelInfo> = emptyList()
 ) {
     companion object {

@@ -75,12 +75,25 @@ fun main() {
                         ContentType.Application.Json
                     )
                 }
+
+                /**
+                 * Observed reality vs. official status pages — flags "hidden degradation"
+                 * the provider hasn't publicly acknowledged.
+                 */
+                get("/insights") {
+                    val latest = service.storage.readLatest()
+                    val history = service.storage.readHistory(config.uptimeWindowRuns)
+                    call.respond(Stats.insights(latest, history, config.models, config.degradedLatencyRatio))
+                }
             }
 
             /** Prometheus metrics (text exposition format). */
             get("/metrics") {
+                val latest = service.storage.readLatest()
+                val history = service.storage.readHistory(config.uptimeWindowRuns)
+                val insights = Stats.insights(latest, history, config.models, config.degradedLatencyRatio)
                 call.respondText(
-                    Stats.prometheus(service.storage.readLatest()),
+                    Stats.prometheus(latest) + Stats.prometheusInsights(insights),
                     ContentType.Text.Plain
                 )
             }
