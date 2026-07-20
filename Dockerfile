@@ -1,9 +1,11 @@
 # ── Build stage ──────────────────────────────────────────────
-FROM gradle:8.5-jdk21 AS build
+# Uses the project's own checksum-pinned Gradle wrapper for reproducibility
+FROM eclipse-temurin:21-jdk AS build
 WORKDIR /app
-COPY build.gradle.kts settings.gradle.kts gradle.properties ./
+COPY gradlew gradle.properties build.gradle.kts settings.gradle.kts ./
+COPY gradle ./gradle
 COPY src ./src
-RUN gradle installDist --no-daemon
+RUN chmod +x gradlew && ./gradlew installDist --no-daemon
 
 # ── Runtime stage ────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine

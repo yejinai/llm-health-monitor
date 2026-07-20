@@ -4,8 +4,8 @@
 
 [![build](https://github.com/hajunho/llm-health-monitor/actions/workflows/build.yml/badge.svg)](https://github.com/hajunho/llm-health-monitor/actions)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?logo=kotlin&logoColor=white)
-![ktor](https://img.shields.io/badge/Ktor-3.0-087CFA)
+![kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white)
+![ktor](https://img.shields.io/badge/Ktor-3.3-087CFA)
 ![no database](https://img.shields.io/badge/database-none-brightgreen)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
@@ -196,8 +196,9 @@ The whole codebase is small by design; please keep it that way.
 ## Notes
 
 - API keys are read from **environment variables only** — never written to config or data files.
-- The Gradle wrapper JAR is the official Gradle 8.5 artifact (SHA-256 verified), and the
-  distribution download is checksum-pinned in `gradle-wrapper.properties`.
+- The Gradle wrapper JAR is the official Gradle 9.1 artifact, and the distribution download is
+  SHA-256-pinned in `gradle-wrapper.properties`. Gradle 9.1 runs on any JDK 17–25; the build
+  toolchain (JDK 21) is auto-provisioned via the Foojay resolver.
 - `POST /api/health/check` is unauthenticated by design (self-hosted tool). Put it behind a
   reverse proxy or add auth if you expose it publicly.
 
