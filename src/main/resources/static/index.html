@@ -29,6 +29,16 @@
   .alert { background: #da363322; border: 1px solid #f8514966; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; }
   .alert strong { color: #f85149; }
   .official-note { font-size: 11px; color: #8b949e; margin-top: 2px; }
+  details.keys { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; }
+  details.keys summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+  .keyrow { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .keyrow .pname { min-width: 90px; font-size: 13px; font-weight: 600; }
+  .keyrow input { flex: 1; min-width: 220px; background: #0d1117; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 6px 10px; font-size: 12px; font-family: monospace; }
+  .keysrc { font-size: 10px; padding: 2px 8px; border-radius: 999px; }
+  .keysrc.ui  { background: #1a4d2e33; color: #3fb950; }
+  .keysrc.env { background: #0d419d33; color: #58a6ff; }
+  .keysrc.none{ background: #21262d;   color: #6e7681; }
+  .keynote { font-size: 11px; color: #8b949e; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -36,6 +46,13 @@
   <div class="sub">Last checked: <span id="checkedAt">–</span>
     &nbsp;<button onclick="recheck()">Re-check now</button></div>
   <div id="alerts"></div>
+  <details class="keys" id="keysSection">
+    <summary>🔑 API keys</summary>
+    <div id="keyRows"></div>
+    <div class="keynote">Keys are stored locally in <code>data/keys.json</code> (gitignored) and only masked
+    previews are shown. Management works from this machine only (localhost). Environment variables
+    still work as a fallback for servers.</div>
+  </details>
   <div class="summary" id="summary"></div>
   <div class="summary" id="official"></div>
   <table>
@@ -101,7 +118,49 @@ async function recheck() {
   await fetch('/api/health/check', { method: 'POST' });
   load();
 }
+
+// ── 🔑 API key management (localhost only) ──
+const PROVIDER_LABELS = { openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', xai: 'xAI' };
+async function loadKeys() {
+  try {
+    const res = await fetch('/api/keys');
+    if (!res.ok) { document.getElementById('keysSection').style.display = 'none'; return; }
+    const keys = await res.json();
+    const anyMissing = keys.some(k => !k.configured);
+    if (anyMissing) document.getElementById('keysSection').open = true;
+    document.getElementById('keyRows').innerHTML = keys.map(k => `
+      <div class="keyrow">
+        <span class="pname">${PROVIDER_LABELS[k.provider] || k.provider}</span>
+        <span class="keysrc ${k.source}">${k.source === 'ui' ? '✓ set (dashboard)' : k.source === 'env' ? '✓ set (env var)' : 'not set'}</span>
+        <span style="font-family:monospace;font-size:11px;color:#8b949e">${k.masked || ''}</span>
+        <input type="password" id="key-${k.provider}" placeholder="paste API key…" autocomplete="off">
+        <button onclick="saveKey('${k.provider}')">Save</button>
+        ${k.source === 'ui' ? `<button onclick="removeKey('${k.provider}')">Remove</button>` : ''}
+      </div>`).join('');
+  } catch (e) { document.getElementById('keysSection').style.display = 'none'; }
+}
+async function saveKey(provider) {
+  const input = document.getElementById('key-' + provider);
+  const key = input.value.trim();
+  if (!key) { input.focus(); return; }
+  await fetch('/api/keys', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, key })
+  });
+  input.value = '';
+  document.getElementById('checkedAt').textContent = 'checking with new key…';
+  setTimeout(() => { load(); loadKeys(); }, 4000);
+  loadKeys();
+}
+async function removeKey(provider) {
+  await fetch('/api/keys/' + provider, { method: 'DELETE' });
+  setTimeout(() => { load(); loadKeys(); }, 4000);
+  loadKeys();
+}
+
 load();
+loadKeys();
 setInterval(load, 60000);
 </script>
 </body>

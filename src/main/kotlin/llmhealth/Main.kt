@@ -5,18 +5,28 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.ktor.server.plugins.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.*
+import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
+
+/** Key management is only allowed from the local machine, even if the port is exposed. */
+private fun ApplicationCall.isLoopback(): Boolean {
+    val host = request.origin.remoteHost
+    return host == "127.0.0.1" || host == "::1" || host == "0:0:0:0:0:0:0:1" || host == "localhost"
+}
 
 fun main() {
     val logger = LoggerFactory.getLogger("Main")
     val config = AppConfig.load()
 
-    val service = HealthCheckService(config)
+    val keyStore = KeyStore(config.dataDir)
+    val service = HealthCheckService(config, keyStore)
     service.startScheduler()
 
     logger.info("llm-health-monitor starting on port ${config.port}")
@@ -84,6 +94,47 @@ fun main() {
                     val latest = service.storage.readLatest()
                     val history = service.storage.readHistory(config.uptimeWindowRuns)
                     call.respond(Stats.insights(latest, history, config.models, config.degradedLatencyRatio, config.confirmationRuns))
+                }
+            }
+
+            /**
+             * 🔑 API key management — LOCAL MACHINE ONLY (loopback-restricted).
+             * Keys are stored in {dataDir}/keys.json (gitignored) and only masked
+             * previews are ever returned.
+             */
+            route("/api/keys") {
+                get {
+                    if (!call.isLoopback()) {
+                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Key management is localhost-only"))
+                        return@get
+                    }
+                    call.respond(keyStore.status(config.models.map { it.provider }))
+                }
+                post {
+                    if (!call.isLoopback()) {
+                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Key management is localhost-only"))
+                        return@post
+                    }
+                    val req = call.receive<SetKeyRequest>()
+                    if (req.key.isBlank()) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "key must not be blank"))
+                        return@post
+                    }
+                    keyStore.set(req.provider, req.key)
+                    // Re-check immediately so the dashboard reflects the new key without waiting
+                    call.application.launch { service.runHealthCheck() }
+                    call.respond(keyStore.status(config.models.map { it.provider }))
+                }
+                delete("/{provider}") {
+                    if (!call.isLoopback()) {
+                        call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Key management is localhost-only"))
+                        return@delete
+                    }
+                    val provider = call.parameters["provider"]
+                        ?: return@delete call.respond(HttpStatusCode.BadRequest, mapOf("error" to "provider required"))
+                    keyStore.remove(provider)
+                    call.application.launch { service.runHealthCheck() }
+                    call.respond(keyStore.status(config.models.map { it.provider }))
                 }
             }
 

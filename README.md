@@ -83,6 +83,7 @@ That flag is what pages you before your users notice — and before the vendor t
 - 🌐 **Read-only HTTP API** + single-file **dark dashboard** with uptime % and red alert banners
 - 🔔 **Webhook alerts** — one URL serves Slack (`text`), Discord (`content`), and machines (`events[]`); fires on transitions only, zero hourly noise
 - 🏷 **Live README badge** (Shields.io endpoint) &nbsp;·&nbsp; 📈 **Prometheus `/metrics`** &nbsp;·&nbsp; 🐳 **Dockerfile**
+- 🔑 **In-dashboard key setup** — paste keys in the browser (localhost-only endpoints, masked previews, gitignored storage); env vars still supported for servers
 - 🧩 **Pluggable providers** — one small interface; provider quirks (o-series `max_completion_tokens`, Gemini URL scheme, Anthropic version header) already handled
 - 🚫 **Graceful key handling** — providers without an API key are `skipped`, never crash
 
@@ -91,21 +92,38 @@ That flag is what pages you before your users notice — and before the vendor t
 ```bash
 git clone https://github.com/hajunho/llm-health-monitor.git
 cd llm-health-monitor
-
-cp config.example.json config.json      # 1. pick your models
-
-export OPENAI_API_KEY=sk-...            # 2. only the keys you have
-export ANTHROPIC_API_KEY=sk-ant-...
-export GEMINI_API_KEY=...
-export XAI_API_KEY=xai-...
-
-./gradlew run                           # 3. done — dashboard on :8080
+cp config.example.json config.json      # pick your models (defaults are fine)
+./gradlew run
 ```
 
-Open <http://localhost:8080>. The first check runs immediately.
+Open <http://localhost:8080>, expand **🔑 API keys**, paste the keys you have, done —
+a fresh check runs automatically with each key you save. No environment variables,
+no restart, no editor.
+
+## Setting API keys
+
+Two ways, use whichever fits:
+
+| Method | Best for | How |
+|---|---|---|
+| **Dashboard UI** (recommended locally) | Your own machine | Open the dashboard → 🔑 API keys → paste → Save |
+| **Environment variables** | Servers, Docker, CI | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY` |
+
+How the dashboard method works, and why it's safe *for a local machine*:
+
+- Keys are saved to **`data/keys.json`** on your disk — plain JSON, **gitignored**, never leaves
+  your machine. Delete the file (or click *Remove*) to forget a key.
+- The key-management endpoints (`/api/keys`) accept **loopback connections only** — even if you
+  expose port 8080 to your network, remote clients get `403` and can neither read nor set keys.
+- The API only ever returns **masked previews** (`sk-pr…Xk4Q`); full keys are never sent back out.
+- Precedence: a dashboard-set key overrides the env var for the same provider.
+- Providers without any key are simply marked `skipped` — nothing crashes.
+
+For **servers or containers**, prefer environment variables (see `.env.example`) and treat the
+dashboard method as what it is: a convenience for localhost.
 
 <details>
-<summary><b>Or with Docker</b></summary>
+<summary><b>Docker</b></summary>
 
 ```bash
 docker build -t llm-health-monitor .
@@ -127,6 +145,7 @@ docker run -p 8080:8080 \
 | `GET /api/health/badge` | Shields.io endpoint-badge JSON |
 | `GET /metrics` | Prometheus text exposition (incl. `llm_health_hidden_degradation`) |
 | `POST /api/health/check` | Trigger an immediate re-check |
+| `GET/POST /api/keys`, `DELETE /api/keys/{provider}` | Key management — **loopback-only**, masked responses |
 
 **Live badge for your README:**
 
@@ -195,7 +214,8 @@ The whole codebase is small by design; please keep it that way.
 
 ## Notes
 
-- API keys are read from **environment variables only** — never written to config or data files.
+- API keys never appear in `config.json` or in any API response — dashboard keys live in the
+  gitignored `data/keys.json` (localhost management only), env vars remain server-grade.
 - The Gradle wrapper JAR is the official Gradle 9.1 artifact, and the distribution download is
   SHA-256-pinned in `gradle-wrapper.properties`. Gradle 9.1 runs on any JDK 17–25; the build
   toolchain (JDK 21) is auto-provisioned via the Foojay resolver.
@@ -204,6 +224,16 @@ The whole codebase is small by design; please keep it that way.
 
 Born from a production multi-LLM service (ZeliAI) where knowing *"which provider is down right
 now?"* before users notice turned out to matter a lot.
+
+## References & related projects
+
+Compared against / inspired by — all worth knowing:
+
+- [LiteLLM](https://github.com/BerriAI/litellm) — LLM gateway with built-in [health check endpoints](https://docs.litellm.ai/docs/proxy/health)
+- [Langfuse](https://github.com/langfuse/langfuse) · [OpenLLMetry](https://github.com/traceloop/openllmetry) · [Opik](https://github.com/comet-ml/opik) — LLM observability platforms (tracing/evals of your own traffic)
+- [Uptime Kuma](https://github.com/louislam/uptime-kuma) · [Gatus](https://github.com/TwiN/gatus) — the generic self-hosted uptime monitors whose badge/alert/uptime UX this tool borrows
+- [Atlassian Statuspage API](https://developer.statuspage.io/) — the `status.json` format used for official-status fetching
+- [Shields.io endpoint badges](https://shields.io/badges/endpoint-badge) — the live badge format served at `/api/health/badge`
 
 ## License
 

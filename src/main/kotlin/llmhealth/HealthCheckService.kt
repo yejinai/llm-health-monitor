@@ -22,7 +22,7 @@ import java.time.format.DateTimeFormatter
  *   unavailable — request timed out
  *   skipped     — no API key configured for the provider
  */
-class HealthCheckService(private val config: AppConfig) {
+class HealthCheckService(private val config: AppConfig, private val keyStore: KeyStore) {
     private val logger = LoggerFactory.getLogger(HealthCheckService::class.java)
     private val dtFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
     val storage = JsonFileStorage(config.dataDir, config.historyMaxRuns)
@@ -106,7 +106,7 @@ class HealthCheckService(private val config: AppConfig) {
                 status = "error", errorMessage = "Unknown provider '${model.provider}'", checkedAt = checkedAt
             )
 
-        val apiKey = ApiKeys.forProvider(model.provider)
+        val apiKey = keyStore.get(model.provider)
             ?: return ModelHealthStatus(
                 modelName = model.name, provider = model.provider, modelType = model.type,
                 status = "skipped", errorMessage = "No API key configured", checkedAt = checkedAt

@@ -6,8 +6,8 @@ import java.io.File
 
 /**
  * Application configuration, loaded from config.json in the working directory.
- * API keys are NEVER stored here — they come from environment variables only:
- *   OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, XAI_API_KEY
+ * API keys are NEVER stored here — they are managed by KeyStore
+ * (dashboard UI → data/keys.json, or environment variables).
  */
 @Serializable
 data class AppConfig(
@@ -52,18 +52,5 @@ data class AppConfig(
     }
 }
 
-/** Environment-variable API keys. Missing keys mean the provider's models are 'skipped'. */
-object ApiKeys {
-    val openai: String? = System.getenv("OPENAI_API_KEY")?.takeIf { it.isNotBlank() }
-    val anthropic: String? = System.getenv("ANTHROPIC_API_KEY")?.takeIf { it.isNotBlank() }
-    val gemini: String? = System.getenv("GEMINI_API_KEY")?.takeIf { it.isNotBlank() }
-    val xai: String? = System.getenv("XAI_API_KEY")?.takeIf { it.isNotBlank() }
-
-    fun forProvider(provider: String): String? = when (provider.lowercase()) {
-        "openai" -> openai
-        "anthropic" -> anthropic
-        "google" -> gemini
-        "xai", "grok" -> xai
-        else -> null
-    }
-}
+// API keys are resolved by KeyStore (dashboard-entered keys.json > environment variables).
+// See KeyStore.kt.
