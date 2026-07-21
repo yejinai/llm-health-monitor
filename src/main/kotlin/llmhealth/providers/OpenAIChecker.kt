@@ -22,8 +22,8 @@ object OpenAIChecker : ProviderChecker {
             return
         }
 
-        // Reasoning models (o-series) require max_completion_tokens instead of max_tokens
-        val isReasoningModel = model.name.startsWith("o")
+        // Reasoning models (o-series, gpt-5 family) require max_completion_tokens instead of max_tokens
+        val isReasoningModel = model.name.startsWith("o") || model.name.startsWith("gpt-5")
         val requestBody = buildJsonObject {
             put("model", model.name)
             putJsonArray("messages") {

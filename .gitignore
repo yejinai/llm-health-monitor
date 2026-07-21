@@ -8,6 +8,7 @@ config.json
 # Gradle
 .gradle/
 build/
+.kotlin/
 
 # IDE
 .idea/

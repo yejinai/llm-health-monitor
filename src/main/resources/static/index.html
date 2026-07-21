@@ -60,6 +60,11 @@
     <tbody id="rows"></tbody>
   </table>
 <script>
+// Escape untrusted strings (provider error messages, status descriptions) before innerHTML
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 async function load() {
   const res = await fetch('/api/health/models');
   if (!res.ok) { document.getElementById('checkedAt').textContent = 'waiting for first check…'; return; }
@@ -77,7 +82,7 @@ async function load() {
     if (insRes.ok) {
       const hidden = (await insRes.json()).filter(i => i.hidden_degradation);
       document.getElementById('alerts').innerHTML = hidden.map(i =>
-        `<div class="alert">⚠️ <strong>Hidden degradation:</strong> ${i.model_name} (${i.provider}) — ${i.note}</div>`
+        `<div class="alert">⚠️ <strong>Hidden degradation:</strong> ${esc(i.model_name)} (${esc(i.provider)}) — ${esc(i.note)}</div>`
       ).join('');
     }
   } catch (e) { /* insights optional */ }
@@ -87,8 +92,8 @@ async function load() {
   document.getElementById('official').innerHTML = official.map(o => `
     <div class="stat">
       <div class="n">${indicatorIcon[o.indicator] || '⚪'}</div>
-      <div class="l">${o.provider} official</div>
-      <div class="official-note">${o.description || o.indicator}</div>
+      <div class="l">${esc(o.provider)} official</div>
+      <div class="official-note">${esc(o.description || o.indicator)}</div>
     </div>`).join('');
   document.getElementById('checkedAt').textContent = data.last_checked_at || '–';
   const s = data.summary;
@@ -103,13 +108,13 @@ async function load() {
       : '–';
     return `
     <tr>
-      <td><strong>${m.model_name}</strong></td>
-      <td>${m.provider}</td>
-      <td>${m.model_type}</td>
-      <td><span class="badge ${m.status}">${m.status}</span></td>
+      <td><strong>${esc(m.model_name)}</strong></td>
+      <td>${esc(m.provider)}</td>
+      <td>${esc(m.model_type)}</td>
+      <td><span class="badge ${esc(m.status)}">${esc(m.status)}</span></td>
       <td>${m.latency_ms != null ? m.latency_ms + ' ms' : '–'}</td>
       <td>${uptime}</td>
-      <td class="err" title="${m.error_message || ''}">${m.error_message || ''}</td>
+      <td class="err" title="${esc(m.error_message)}">${esc(m.error_message)}</td>
     </tr>`;
   }).join('');
 }
